@@ -83,8 +83,7 @@ document.addEventListener("DOMContentLoaded", () => {
     
     const logs = sortedLogs
       .map(([logKey, responseTime]) => {
-        const type = getRequestType(logKey);
-        return `[${type}] ${logKey} - ${responseTime.toFixed(2)}ms`;
+        return `${logKey} - ${responseTime.toFixed(2)}ms`;
       })
       .join("\n");
 

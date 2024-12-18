@@ -42,9 +42,9 @@ body {
 }
 
 .logs-container {
-  background: #f8f9fa;
-  border-radius: 8px;
-  padding: 16px;
+  background: #525252;
+  border-radius: 2px;
+  padding: 6px;
   margin-bottom: 16px;
   max-height: 400px;
   overflow-y: auto;
@@ -56,7 +56,8 @@ body {
   font-size: 11px;
   white-space: pre-wrap;
   word-break: break-all;
-  color: #3c4043;
+  color: #ffffff;
+  line-height: 13px;
 }
 
 .button-container {
@@ -66,10 +67,10 @@ body {
 }
 
 button {
-  padding: 8px 16px;
-  font-size: 14px;
+  padding: 4px 6px;
+  font-size: 12px;
   border: none;
-  border-radius: 4px;
+  border-radius: 2px;
   background: #1a73e8;
   color: white;
   cursor: pointer;
