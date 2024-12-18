@@ -48,11 +48,11 @@ function updateBadgeForActiveTab() {
   });
 }
 
-// Enhanced request tracking for SPA and traditional websites
+// Enhanced request tracking for all API calls
 chrome.webRequest.onBeforeRequest.addListener(
   (details) => {
-    // Ignore non-http(s) requests and extensions
-    if (!details.url.startsWith('http') || details.type !== 'xmlhttprequest') return;
+    // Ignore non-http(s) requests
+    if (!details.url.startsWith('http')) return;
 
     const requestId = details.requestId;
     const url = new URL(details.url);
@@ -71,8 +71,8 @@ chrome.webRequest.onBeforeRequest.addListener(
 
 chrome.webRequest.onCompleted.addListener(
   (details) => {
-    // Ignore non-http(s) requests and extensions
-    if (!details.url.startsWith('http') || details.type !== 'xmlhttprequest') return;
+    // Ignore non-http(s) requests
+    if (!details.url.startsWith('http')) return;
 
     const requestId = details.requestId;
     const requestInfo = requestDetails.get(requestId);
@@ -125,7 +125,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           });
         });
         
-        return true; // Indicates we wish to send a response asynchronously
+        return true;
       }
     });
     return true;

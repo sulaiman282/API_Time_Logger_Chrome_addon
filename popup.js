@@ -6,32 +6,28 @@ document.addEventListener("DOMContentLoaded", () => {
   
   let currentProfile = '';
   let currentLogs = {};
-  let activeFilters = new Set(['All']);
+  let activeFilter = 'All';
 
-  // Load saved filters for domain
-  async function loadSavedFilters(domain) {
+  // Load saved filter for domain
+  async function loadSavedFilter(domain) {
     const result = await chrome.storage.local.get(['domainFilters']);
     const domainFilters = result.domainFilters || {};
-    if (domainFilters[domain]) {
-      activeFilters = new Set(domainFilters[domain]);
-      updateFilterButtons();
-    } else {
-      activeFilters = new Set(['All']);
-      updateFilterButtons();
-    }
+    // Always default to 'All' if no filter is saved
+    activeFilter = domainFilters[domain] || 'All';
+    updateFilterButtons();
   }
 
-  // Save filters for domain
-  async function saveFilters(domain) {
+  // Save filter for domain
+  async function saveFilter(domain) {
     const result = await chrome.storage.local.get(['domainFilters']);
     const domainFilters = result.domainFilters || {};
-    domainFilters[domain] = Array.from(activeFilters);
+    domainFilters[domain] = activeFilter;
     await chrome.storage.local.set({ domainFilters });
   }
 
   function updateFilterButtons() {
     filterButtons.forEach(btn => {
-      btn.classList.toggle('active', activeFilters.has(btn.dataset.type));
+      btn.classList.toggle('active', btn.dataset.type === activeFilter);
     });
   }
 
@@ -71,9 +67,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // Convert logs to an array and sort by log number
     const sortedLogs = Object.entries(profileLogs)
       .filter(([logKey]) => {
-        if (activeFilters.has('All')) return true;
+        if (activeFilter === 'All') return true;
         const requestType = getRequestType(logKey);
-        return activeFilters.has(requestType);
+        return requestType === activeFilter;
       })
       .sort((a, b) => {
         const logNumA = parseInt(a[0].split('.')[0]);
@@ -96,7 +92,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (response && response.logs) {
         console.log(`[Endpoint Eye] Fetched logs for profile: ${response.profile}`, response.logs);
         currentProfile = response.profile;
-        await loadSavedFilters(currentProfile);
+        await loadSavedFilter(currentProfile);
         updateLogsDisplay(response.logs);
       }
     });
@@ -107,23 +103,12 @@ document.addEventListener("DOMContentLoaded", () => {
     btn.addEventListener('click', async () => {
       const filterType = btn.dataset.type;
       
-      if (filterType === 'All') {
-        activeFilters.clear();
-        activeFilters.add('All');
-      } else {
-        activeFilters.delete('All');
-        if (activeFilters.has(filterType)) {
-          activeFilters.delete(filterType);
-          if (activeFilters.size === 0) {
-            activeFilters.add('All');
-          }
-        } else {
-          activeFilters.add(filterType);
-        }
-      }
+      // If clicking the already active filter, do nothing
+      if (filterType === activeFilter) return;
       
+      activeFilter = filterType;
       updateFilterButtons();
-      await saveFilters(currentProfile);
+      await saveFilter(currentProfile);
       updateLogsDisplay(currentLogs);
     });
   });
@@ -138,9 +123,9 @@ document.addEventListener("DOMContentLoaded", () => {
         
         const filteredLogs = Object.fromEntries(
           Object.entries(profileData.logs).filter(([logKey]) => {
-            if (activeFilters.has('All')) return true;
+            if (activeFilter === 'All') return true;
             const requestType = getRequestType(logKey);
-            return activeFilters.has(requestType);
+            return requestType === activeFilter;
           })
         );
         
@@ -156,10 +141,14 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   clearButton.addEventListener("click", () => {
-    chrome.runtime.sendMessage({ action: "clearLogs" }, (response) => {
+    chrome.runtime.sendMessage({ action: "clearLogs" }, async (response) => {
       if (response && response.success) {
         logsContainer.textContent = "Logs cleared.";
         currentLogs = {};
+        // Reset filter to 'All' when clearing logs
+        activeFilter = 'All';
+        updateFilterButtons();
+        await saveFilter(currentProfile);
       }
     });
   });

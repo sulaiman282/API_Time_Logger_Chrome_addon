@@ -5,10 +5,11 @@ body {
 }
 
 .title {
-  font-size: 18px;
+  font-size: 12px;
   font-weight: 600;
-  margin: 0 0 16px 0;
+  margin: 0 0 6px 0;
   color: #1a73e8;
+  text-align: center;
 }
 
 .filter-container {
