@@ -1,10 +1,55 @@
-// Store start times of requests
-const requestTimes = new Map();
+// Store start times and methods of requests
+const requestDetails = new Map();
+
+// Function to log debug information
+function debugLog(message) {
+  console.log(`[API Response Time Logger] ${message}`);
+}
+
+// Function to get or initialize profile logs
+function getProfileLogs(profile) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get(['profileLogs'], (result) => {
+      let profileLogs = result.profileLogs || {};
+      
+      // Initialize profile if not exists
+      if (!profileLogs[profile]) {
+        profileLogs[profile] = {
+          logs: {},
+          lastLogNumber: 0
+        };
+      }
+      
+      // Save updated profile logs
+      chrome.storage.local.set({ profileLogs }, () => {
+        debugLog(`Initialized/Retrieved logs for profile: ${profile}`);
+        resolve(profileLogs[profile]);
+      });
+    });
+  });
+}
+
+// Function to update badge count
+function updateBadgeCount(profile) {
+  chrome.storage.local.get(['profileLogs'], (result) => {
+    const profileLogs = result.profileLogs || {};
+    const profileData = profileLogs[profile] || { logs: {} };
+    const count = Object.keys(profileData.logs).length;
+    
+    debugLog(`Badge count for ${profile}: ${count}`);
+    
+    chrome.action.setBadgeText({ text: count > 0 ? count.toString() : "" });
+  });
+}
 
 // Track when requests start
 chrome.webRequest.onBeforeRequest.addListener(
   (details) => {
-    requestTimes.set(details.requestId, details.timeStamp);
+    requestDetails.set(details.requestId, {
+      startTime: details.timeStamp,
+      method: details.method || 'GET',
+      url: details.url
+    });
   },
   { urls: ["<all_urls>"] }
 );
@@ -12,32 +57,48 @@ chrome.webRequest.onBeforeRequest.addListener(
 // Track when requests complete and calculate response time
 chrome.webRequest.onCompleted.addListener(
   (details) => {
-    const startTime = requestTimes.get(details.requestId);
-    if (!startTime) return;
+    const requestInfo = requestDetails.get(details.requestId);
+    if (!requestInfo) return;
 
-    const responseTime = details.timeStamp - startTime;
-    requestTimes.delete(details.requestId);
+    const responseTime = details.timeStamp - requestInfo.startTime;
+    requestDetails.delete(details.requestId);
 
-    const domain = new URL(details.url).hostname;
+    const profile = new URL(details.url).hostname;
     
-    // Only log API calls (adjust these conditions based on your needs)
-    if (details.type === 'xmlhttprequest' || details.url.includes('/api/')) {
-      // Fetch domain-specific data
-      chrome.storage.local.get([domain], (result) => {
-        const domainData = result[domain] || {};
-        const endpoint = details.url;
+    // Only log API calls
+    if (details.type === 'xmlhttprequest' || 
+        details.url.includes('/api/') || 
+        ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'].includes(requestInfo.method)) {
+      
+      debugLog(`Logging API call: ${requestInfo.method} ${details.url} - ${responseTime}ms`);
+      
+      // Get or initialize profile logs
+      getProfileLogs(profile).then((profileData) => {
+        chrome.storage.local.get(['profileLogs'], (result) => {
+          let profileLogs = result.profileLogs || {};
+          
+          // Increment log number
+          profileData.lastLogNumber++;
+          
+          // Create a unique key that includes method and endpoint
+          const logKey = `${profileData.lastLogNumber}. ${requestInfo.method} ${details.url}`;
 
-        // Update only if response time is higher
-        if (!domainData[endpoint] || domainData[endpoint] < responseTime) {
-          domainData[endpoint] = responseTime;
+          // Store log with response time
+          profileData.logs[logKey] = responseTime;
+          profileLogs[profile] = profileData;
 
           // Save updated data
-          chrome.storage.local.set({ [domain]: domainData }, () => {
+          chrome.storage.local.set({ profileLogs }, () => {
             // Update badge count after saving
-            const count = Object.keys(domainData).length;
-            chrome.action.setBadgeText({ text: count.toString() });
+            updateBadgeCount(profile);
+            
+            // Broadcast update to popup
+            chrome.runtime.sendMessage({
+              action: "apiLogsUpdated",
+              profile: profile
+            });
           });
-        }
+        });
       });
     }
   },
@@ -47,7 +108,46 @@ chrome.webRequest.onCompleted.addListener(
 // Clean up if requests fail or are cancelled
 chrome.webRequest.onErrorOccurred.addListener(
   (details) => {
-    requestTimes.delete(details.requestId);
+    requestDetails.delete(details.requestId);
   },
   { urls: ["<all_urls>"] }
 );
+
+// Listen for messages from popup
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "getBadgeCount") {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const profile = new URL(tabs[0].url).hostname;
+      updateBadgeCount(profile);
+    });
+  } else if (request.action === "getProfileLogs") {
+    // Handle request to get profile logs when popup opens
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const profile = new URL(tabs[0].url).hostname;
+      
+      chrome.storage.local.get(['profileLogs'], (result) => {
+        const profileLogs = result.profileLogs || {};
+        const profileData = profileLogs[profile] || { logs: {} };
+        
+        // Send back the profile logs
+        sendResponse({
+          profile: profile,
+          logs: profileData.logs
+        });
+      });
+    });
+    return true; // Indicates we wish to send a response asynchronously
+  } else if (request.action === "clearProfileLogs") {
+    const profile = request.profile;
+    chrome.storage.local.get(['profileLogs'], (result) => {
+      let profileLogs = result.profileLogs || {};
+      delete profileLogs[profile];
+      
+      chrome.storage.local.set({ profileLogs }, () => {
+        chrome.action.setBadgeText({ text: "" });
+        sendResponse({ success: true });
+      });
+    });
+    return true; // Indicates we wish to send a response asynchronously
+  }
+});
