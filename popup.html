@@ -1,15 +1,29 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>API Logs</title>
+  <meta charset="UTF-8">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <p class="title">Endpoint Eye - Blubird Interactive LTD</p>
+  <div class="filter-container">
+    <button class="filter-btn active" data-type="All">All</button>
+    <button class="filter-btn" data-type="Fetch/XHR">Fetch/XHR</button>
+    <button class="filter-btn" data-type="Doc">Doc</button>
+    <button class="filter-btn" data-type="CSS">CSS</button>
+    <button class="filter-btn" data-type="JS">JS</button>
+    <button class="filter-btn" data-type="Font">Font</button>
+    <button class="filter-btn" data-type="Img">Img</button>
+    <button class="filter-btn" data-type="Media">Media</button>
+    <button class="filter-btn" data-type="Manifest">Manifest</button>
+    <button class="filter-btn" data-type="WS">WS</button>
+    <button class="filter-btn" data-type="Wasm">Wasm</button>
+    <button class="filter-btn" data-type="Other">Other</button>
+  </div>
   <div class="logs-container">
     <pre id="logs"></pre>
   </div>
-  <div class="buttons">
+  <div class="button-container">
     <button id="export">Export Logs</button>
     <button id="clear">Clear Logs</button>
   </div>

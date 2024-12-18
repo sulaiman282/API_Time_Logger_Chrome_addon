@@ -3,7 +3,7 @@ const requestDetails = new Map();
 
 // Function to log debug information
 function debugLog(message) {
-  console.log(`[API Response Time Logger] ${message}`);
+  console.log(`[Endpoint Eye] ${message}`);
 }
 
 // Function to get or initialize profile logs
@@ -48,118 +48,116 @@ function updateBadgeForActiveTab() {
   });
 }
 
-// Track when requests start
+// Enhanced request tracking for SPA and traditional websites
 chrome.webRequest.onBeforeRequest.addListener(
   (details) => {
-    requestDetails.set(details.requestId, {
-      startTime: details.timeStamp,
-      method: details.method || 'GET',
-      url: details.url
+    // Ignore non-http(s) requests and extensions
+    if (!details.url.startsWith('http') || details.type !== 'xmlhttprequest') return;
+
+    const requestId = details.requestId;
+    const url = new URL(details.url);
+    const profile = url.hostname;
+
+    requestDetails.set(requestId, {
+      startTime: Date.now(),
+      method: details.method,
+      url: details.url,
+      profile: profile
     });
+  },
+  { urls: ["<all_urls>"] },
+  ["requestBody"]
+);
+
+chrome.webRequest.onCompleted.addListener(
+  (details) => {
+    // Ignore non-http(s) requests and extensions
+    if (!details.url.startsWith('http') || details.type !== 'xmlhttprequest') return;
+
+    const requestId = details.requestId;
+    const requestInfo = requestDetails.get(requestId);
+
+    if (requestInfo) {
+      const endTime = Date.now();
+      const responseTime = endTime - requestInfo.startTime;
+
+      // Remove request from tracking
+      requestDetails.delete(requestId);
+
+      // Get profile logs and save the log
+      chrome.storage.local.get(['profileLogs'], (result) => {
+        let profileLogs = result.profileLogs || {};
+        let profileData = profileLogs[requestInfo.profile] || { logs: {}, lastLogNumber: 0 };
+
+        // Increment log number
+        profileData.lastLogNumber++;
+        const logKey = `${profileData.lastLogNumber}.${requestInfo.method}.${new URL(requestInfo.url).pathname}`;
+
+        // Store log entry
+        profileData.logs[logKey] = responseTime;
+        profileLogs[requestInfo.profile] = profileData;
+
+        // Save updated logs
+        chrome.storage.local.set({ profileLogs }, () => {
+          debugLog(`Logged API call: ${logKey} - ${responseTime}ms`);
+          updateBadgeForActiveTab();
+        });
+      });
+    }
   },
   { urls: ["<all_urls>"] }
 );
 
-// Track when requests complete and calculate response time
-chrome.webRequest.onCompleted.addListener(
-  (details) => {
-    const requestInfo = requestDetails.get(details.requestId);
-    if (!requestInfo) return;
+// Message listener for popup interactions
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "getProfileLogs") {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]) {
+        const profile = new URL(tabs[0].url).hostname;
+        
+        chrome.storage.local.get(['profileLogs'], (result) => {
+          const profileLogs = result.profileLogs || {};
+          const profileData = profileLogs[profile] || { logs: {} };
+          
+          sendResponse({
+            profile: profile,
+            logs: profileData.logs
+          });
+        });
+        
+        return true; // Indicates we wish to send a response asynchronously
+      }
+    });
+    return true;
+  }
+});
 
-    const responseTime = details.timeStamp - requestInfo.startTime;
-    requestDetails.delete(details.requestId);
-
-    const profile = new URL(details.url).hostname;
-    
-    // Only log API calls
-    if (details.type === 'xmlhttprequest' || 
-        details.url.includes('/api/') || 
-        ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'].includes(requestInfo.method)) {
-      
-      debugLog(`Logging API call: ${requestInfo.method} ${details.url} - ${responseTime}ms`);
-      
-      // Get or initialize profile logs
-      getProfileLogs(profile).then((profileData) => {
+// Clear logs message handler
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "clearLogs") {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]) {
+        const profile = new URL(tabs[0].url).hostname;
+        
         chrome.storage.local.get(['profileLogs'], (result) => {
           let profileLogs = result.profileLogs || {};
           
-          // Increment log number
-          profileData.lastLogNumber++;
+          // Clear logs for the current profile
+          if (profileLogs[profile]) {
+            profileLogs[profile].logs = {};
+            profileLogs[profile].lastLogNumber = 0;
+          }
           
-          // Create a unique key that includes method and endpoint
-          const logKey = `${profileData.lastLogNumber}. ${requestInfo.method} ${details.url}`;
-
-          // Store log with response time
-          profileData.logs[logKey] = responseTime;
-          profileLogs[profile] = profileData;
-
-          // Save updated data
           chrome.storage.local.set({ profileLogs }, () => {
-            // Update badge count for active tab
+            debugLog(`Cleared logs for profile: ${profile}`);
             updateBadgeForActiveTab();
-            
-            // Broadcast update to popup
-            chrome.runtime.sendMessage({
-              action: "apiLogsUpdated",
-              profile: profile
-            });
+            sendResponse({ success: true });
           });
         });
-      });
-    }
-  },
-  { urls: ["<all_urls>"] }
-);
-
-// Clean up if requests fail or are cancelled
-chrome.webRequest.onErrorOccurred.addListener(
-  (details) => {
-    requestDetails.delete(details.requestId);
-  },
-  { urls: ["<all_urls>"] }
-);
-
-// Listen for tab changes to update badge count
-chrome.tabs.onActivated.addListener((activeInfo) => {
-  chrome.tabs.get(activeInfo.tabId, (tab) => {
-    if (tab && tab.url) {
-      updateBadgeForActiveTab();
-    }
-  });
-});
-
-// Listen for messages from popup
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === "getBadgeCount") {
-    updateBadgeForActiveTab();
-  } else if (request.action === "getProfileLogs") {
-    // Handle request to get profile logs when popup opens
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const profile = new URL(tabs[0].url).hostname;
-      
-      chrome.storage.local.get(['profileLogs'], (result) => {
-        const profileLogs = result.profileLogs || {};
-        const profileData = profileLogs[profile] || { logs: {} };
         
-        // Send back the profile logs
-        sendResponse({
-          profile: profile,
-          logs: profileData.logs
-        });
-      });
+        return true;
+      }
     });
-    return true; // Indicates we wish to send a response asynchronously
-  } else if (request.action === "clearProfileLogs") {
-    const profile = request.profile;
-    chrome.storage.local.get(['profileLogs'], (result) => {
-      let profileLogs = result.profileLogs || {};
-      delete profileLogs[profile];
-      
-      chrome.storage.local.set({ profileLogs }, () => {
-        updateBadgeForActiveTab();
-        sendResponse({ success: true });
-      });
-    });
-    return true; // Indicates we wish to send a response asynchronously
+    return true;
   }
 });
