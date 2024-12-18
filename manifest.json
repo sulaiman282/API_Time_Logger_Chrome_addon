@@ -1,0 +1,25 @@
+{
+    "manifest_version": 3,
+    "name": "API Response Time Logger",
+    "version": "1.0",
+    "description": "Logs and displays REST API calls for the active browser URL.",
+    "permissions": [
+      "storage",
+      "activeTab",
+      "scripting"
+    ],
+    "background": {
+      "service_worker": "background.js"
+    },
+    "host_permissions": ["<all_urls>"],
+    "icons": {
+      "16": "icons/logo.png",
+      "48": "icons/logo.png",
+      "128": "icons/logo.png"
+    },
+    "action": {
+      "default_popup": "popup.html",
+      "default_icon": "icons/logo.png"
+    }
+  }
+  
