@@ -1,6 +1,6 @@
 {
     "manifest_version": 3,
-    "name": "API Response Time Logger",
+    "name": "Endpoint Eye - Blubird Interactive LTD",
     "version": "1.0",
     "description": "Logs and displays REST API calls for the active browser URL.",
     "permissions": [
