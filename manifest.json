@@ -1,26 +1,32 @@
 {
-    "manifest_version": 3,
-    "name": "Endpoint Eye - Blubird Interactive LTD",
-    "version": "1.0",
-    "description": "Logs and displays REST API calls for the active browser URL.",
-    "permissions": [
-      "storage",
-      "activeTab",
-      "scripting",
-      "webRequest",
-      "downloads"
-    ],
-    "background": {
-      "service_worker": "background.js"
-    },
-    "host_permissions": ["<all_urls>"],
-    "icons": {
+  "manifest_version": 3,
+  "name": "Endpoint Eye - Blubird Interactive LTD",
+  "version": "1.0",
+  "description": "Logs API response times for debugging and performance monitoring",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabs",
+    "webRequest",
+    "downloads"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
       "16": "icons/logo.png",
       "48": "icons/logo.png",
       "128": "icons/logo.png"
-    },
-    "action": {
-      "default_popup": "popup.html",
-      "default_icon": "icons/logo.png"
     }
+  },
+  "icons": {
+    "16": "icons/logo.png",
+    "48": "icons/logo.png",
+    "128": "icons/logo.png"
   }
+}

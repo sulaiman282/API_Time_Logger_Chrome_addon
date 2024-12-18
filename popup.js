@@ -81,16 +81,17 @@ document.addEventListener("DOMContentLoaded", () => {
     
     const logs = sortedLogs
       .map(([logKey, responseTime]) => {
-        // Format response time with 2 decimal places and fixed width
         return `${logKey} - ${formatResponseTime(responseTime)}`;
       })
       .join("\n");
 
     logsContainer.textContent = logs || "No matching logs found.";
+    
+    // Scroll to bottom to show latest logs
+    logsContainer.scrollTop = logsContainer.scrollHeight;
   }
 
   async function fetchProfileLogs() {
-    // Request profile logs from background script
     chrome.runtime.sendMessage({ action: "getProfileLogs" }, async (response) => {
       if (response && response.logs) {
         console.log(`[Endpoint Eye] Fetched logs for profile: ${response.profile}`, response.logs);
@@ -101,12 +102,19 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // Listen for real-time log updates
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === "newLogAdded" && message.profile === currentProfile) {
+      console.log(`[Endpoint Eye] New log received for ${message.profile}`);
+      updateLogsDisplay(message.logs);
+    }
+  });
+
   // Handle filter button clicks
   filterButtons.forEach(btn => {
     btn.addEventListener('click', async () => {
       const filterType = btn.dataset.type;
       
-      // If clicking the already active filter, do nothing
       if (filterType === activeFilter) return;
       
       activeFilter = filterType;
@@ -114,7 +122,6 @@ document.addEventListener("DOMContentLoaded", () => {
       await saveFilter(currentProfile);
       updateLogsDisplay(currentLogs);
       
-      // Update badge count with new filter
       chrome.runtime.sendMessage({ 
         action: "updateBadgeCount",
         filterType: activeFilter
@@ -154,12 +161,10 @@ document.addEventListener("DOMContentLoaded", () => {
       if (response && response.success) {
         logsContainer.textContent = "Logs cleared.";
         currentLogs = {};
-        // Reset filter to 'All' when clearing logs
         activeFilter = 'All';
         updateFilterButtons();
         await saveFilter(currentProfile);
         
-        // Update badge count after clearing
         chrome.runtime.sendMessage({ 
           action: "updateBadgeCount",
           filterType: 'All'
