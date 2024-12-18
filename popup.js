@@ -12,7 +12,6 @@ document.addEventListener("DOMContentLoaded", () => {
   async function loadSavedFilter(domain) {
     const result = await chrome.storage.local.get(['domainFilters']);
     const domainFilters = result.domainFilters || {};
-    // Always default to 'All' if no filter is saved
     activeFilter = domainFilters[domain] || 'All';
     updateFilterButtons();
   }
@@ -31,28 +30,31 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  function getRequestType(logKey) {
-    const parts = logKey.split('.');
-    if (parts.length < 3) return 'Other';
+  function getRequestType(url) {
+    if (!url) return 'Other';
     
-    const method = parts[1];
-    const path = parts[2].toLowerCase();
+    const urlLower = url.toLowerCase();
+    const method = url.split(' ')[1]; // Get the HTTP method
     
     if (method === 'GET' || method === 'POST' || method === 'PUT' || method === 'DELETE' || method === 'PATCH') {
-      return 'Fetch/XHR';
+      if (urlLower.includes('/api/') || urlLower.includes('/graphql')) return 'Fetch/XHR';
     }
     
-    if (path.endsWith('.js')) return 'JS';
-    if (path.endsWith('.css')) return 'CSS';
-    if (path.endsWith('.html') || path.endsWith('.htm')) return 'Doc';
-    if (path.match(/\.(jpg|jpeg|png|gif|webp|svg|ico)$/)) return 'Img';
-    if (path.match(/\.(woff|woff2|ttf|otf|eot)$/)) return 'Font';
-    if (path.match(/\.(mp4|webm|ogg|mp3|wav)$/)) return 'Media';
-    if (path.endsWith('.wasm')) return 'Wasm';
-    if (path.endsWith('manifest.json')) return 'Manifest';
-    if (path.startsWith('ws://') || path.startsWith('wss://')) return 'WS';
+    if (urlLower.endsWith('.js')) return 'JS';
+    if (urlLower.endsWith('.css')) return 'CSS';
+    if (urlLower.endsWith('.html') || urlLower.endsWith('.htm')) return 'Doc';
+    if (urlLower.match(/\.(jpg|jpeg|png|gif|webp|svg|ico)$/)) return 'Img';
+    if (urlLower.match(/\.(woff|woff2|ttf|otf|eot)$/)) return 'Font';
+    if (urlLower.match(/\.(mp4|webm|ogg|mp3|wav)$/)) return 'Media';
+    if (urlLower.endsWith('.wasm')) return 'Wasm';
+    if (urlLower.endsWith('manifest.json')) return 'Manifest';
+    if (urlLower.startsWith('ws://') || urlLower.startsWith('wss://')) return 'WS';
     
     return 'Other';
+  }
+
+  function formatResponseTime(ms) {
+    return ms.toFixed(2).padStart(7) + 'ms';
   }
 
   function updateLogsDisplay(profileLogs) {
@@ -79,7 +81,8 @@ document.addEventListener("DOMContentLoaded", () => {
     
     const logs = sortedLogs
       .map(([logKey, responseTime]) => {
-        return `${logKey} - ${responseTime.toFixed(2)}ms`;
+        // Format response time with 2 decimal places and fixed width
+        return `${logKey} - ${formatResponseTime(responseTime)}`;
       })
       .join("\n");
 
@@ -110,6 +113,12 @@ document.addEventListener("DOMContentLoaded", () => {
       updateFilterButtons();
       await saveFilter(currentProfile);
       updateLogsDisplay(currentLogs);
+      
+      // Update badge count with new filter
+      chrome.runtime.sendMessage({ 
+        action: "updateBadgeCount",
+        filterType: activeFilter
+      });
     });
   });
 
@@ -149,6 +158,12 @@ document.addEventListener("DOMContentLoaded", () => {
         activeFilter = 'All';
         updateFilterButtons();
         await saveFilter(currentProfile);
+        
+        // Update badge count after clearing
+        chrome.runtime.sendMessage({ 
+          action: "updateBadgeCount",
+          filterType: 'All'
+        });
       }
     });
   });
@@ -156,6 +171,12 @@ document.addEventListener("DOMContentLoaded", () => {
   // Initial fetch of logs
   fetchProfileLogs();
 
-  // Refresh logs on tab change
-  chrome.tabs.onActivated.addListener(fetchProfileLogs);
+  // Refresh logs and badge count on tab change
+  chrome.tabs.onActivated.addListener(() => {
+    fetchProfileLogs();
+    chrome.runtime.sendMessage({ 
+      action: "updateBadgeCount",
+      filterType: activeFilter
+    });
+  });
 });
