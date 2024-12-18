@@ -29,16 +29,22 @@ function getProfileLogs(profile) {
   });
 }
 
-// Function to update badge count
-function updateBadgeCount(profile) {
-  chrome.storage.local.get(['profileLogs'], (result) => {
-    const profileLogs = result.profileLogs || {};
-    const profileData = profileLogs[profile] || { logs: {} };
-    const count = Object.keys(profileData.logs).length;
-    
-    debugLog(`Badge count for ${profile}: ${count}`);
-    
-    chrome.action.setBadgeText({ text: count > 0 ? count.toString() : "" });
+// Function to update badge count for the current active tab
+function updateBadgeForActiveTab() {
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs[0]) {
+      const profile = new URL(tabs[0].url).hostname;
+      
+      chrome.storage.local.get(['profileLogs'], (result) => {
+        const profileLogs = result.profileLogs || {};
+        const profileData = profileLogs[profile] || { logs: {} };
+        const count = Object.keys(profileData.logs).length;
+        
+        debugLog(`Badge count for active tab (${profile}): ${count}`);
+        
+        chrome.action.setBadgeText({ text: count > 0 ? count.toString() : "" });
+      });
+    }
   });
 }
 
@@ -89,8 +95,8 @@ chrome.webRequest.onCompleted.addListener(
 
           // Save updated data
           chrome.storage.local.set({ profileLogs }, () => {
-            // Update badge count after saving
-            updateBadgeCount(profile);
+            // Update badge count for active tab
+            updateBadgeForActiveTab();
             
             // Broadcast update to popup
             chrome.runtime.sendMessage({
@@ -113,13 +119,19 @@ chrome.webRequest.onErrorOccurred.addListener(
   { urls: ["<all_urls>"] }
 );
 
+// Listen for tab changes to update badge count
+chrome.tabs.onActivated.addListener((activeInfo) => {
+  chrome.tabs.get(activeInfo.tabId, (tab) => {
+    if (tab && tab.url) {
+      updateBadgeForActiveTab();
+    }
+  });
+});
+
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "getBadgeCount") {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const profile = new URL(tabs[0].url).hostname;
-      updateBadgeCount(profile);
-    });
+    updateBadgeForActiveTab();
   } else if (request.action === "getProfileLogs") {
     // Handle request to get profile logs when popup opens
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -144,7 +156,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       delete profileLogs[profile];
       
       chrome.storage.local.set({ profileLogs }, () => {
-        chrome.action.setBadgeText({ text: "" });
+        updateBadgeForActiveTab();
         sendResponse({ success: true });
       });
     });
