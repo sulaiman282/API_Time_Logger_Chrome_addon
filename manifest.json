@@ -6,7 +6,8 @@
     "permissions": [
       "storage",
       "activeTab",
-      "scripting"
+      "scripting",
+      "webRequest"
     ],
     "background": {
       "service_worker": "background.js"
@@ -22,4 +23,3 @@
       "default_icon": "icons/logo.png"
     }
   }
-  
